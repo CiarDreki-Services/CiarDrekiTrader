@@ -45,6 +45,7 @@ namespace CiarDrekiTrader.Helpers
             foreach(var item in oldStocks)
             {
                 SellStock(GetLatestPrice(item.Symbol), item.Qty);
+                Thread.Sleep(400);
             }
             _tradingContext.SaveChanges();
         }
@@ -111,7 +112,7 @@ namespace CiarDrekiTrader.Helpers
             {
                 if(symbol.Contains("-"))
                     symbol = symbol.Substring(0, symbol.IndexOf("-"));
-                monthlyPrices = string.Format("https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol={0}&apikey={1}&datatype=csv", symbol, yourApi).GetStringFromUrl().FromCsv<List<AlphaVantageTSD>>();
+                monthlyPrices = string.Format("https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol={0}&apikey={1}&datatype=csv", symbol, _yourApi).GetStringFromUrl().FromCsv<List<AlphaVantageTSD>>();
             }
             catch (Exception ex)
             {
