@@ -1,11 +1,20 @@
 ﻿using CiarDrekiTrader.Data;
 using CiarDrekiTrader.Helpers;
+using Microsoft.Extensions.Configuration;
+using ServiceStack;
+
+var config = new ConfigurationBuilder().AddUserSecrets<Program>().Build();
+var yourApi = config["AlphaVenture"];
+var mins = 1;
 
 Console.WriteLine(" _____ _           ______          _    _   _____             _           \r\n/  __ (_)          |  _  \\        | |  (_) |_   _|           | |          \r\n| /  \\/_  __ _ _ __| | | |_ __ ___| | ___    | |_ __ __ _  __| | ___ _ __ \r\n| |   | |/ _` | '__| | | | '__/ _ \\ |/ / |   | | '__/ _` |/ _` |/ _ \\ '__|\r\n| \\__/\\ | (_| | |  | |/ /| | |  __/   <| |   | | | | (_| | (_| |  __/ |   \r\n \\____/_|\\__,_|_|  |___/ |_|  \\___|_|\\_\\_|   \\_/_|  \\__,_|\\__,_|\\___|_|   \r\n                                                                          \r\n                                                                          ");
 Console.WriteLine("--------------------------------------------------------------------------");
 Console.WriteLine("Welcome to the CiarDreki Trader.");
-Console.WriteLine("Please Enter your Alpha Vantage API Key (Https://www.AlphaVantage.com):");
-var yourApi = Console.ReadLine();
+if (yourApi.IsNullOrEmpty())
+{
+    Console.WriteLine("Please Enter your Alpha Vantage API Key (Https://www.AlphaVantage.com):");
+    yourApi = Console.ReadLine();
+}
 if (yourApi != null)
 {
     CiarDrekiTradingContext ciarDrekiTradingContext = new();
@@ -18,7 +27,7 @@ if (yourApi != null)
 
 
     ownedStockAgent.BuildPortfolioFromTransactions();
-    stockAgent.GetStockAssetTotal();
+    //stockAgent.GetStockAssetTotal();
     stockAgent.SellOldStocks();
 
     stockAgent.PurchaseNewMovers(cashManager.AvailableBalance());
@@ -28,15 +37,15 @@ if (yourApi != null)
     while (true)
     {
         Console.WriteLine("");
-        Console.WriteLine("Sleeping for 1 minute.");
+        Console.WriteLine($"Sleeping for {mins} minute.");
         Console.WriteLine($"Time is now: {DateTime.Now}");
-        Thread.Sleep(1 * 60000);
+        Thread.Sleep(mins * 60000);
 
         Console.WriteLine("Checking on new top movers...");
         topMovers.FetchMovers();
 
         ownedStockAgent.BuildPortfolioFromTransactions();
-        stockAgent.GetStockAssetTotal();
+        //stockAgent.GetStockAssetTotal();
         stockAgent.SellOldStocks();
         Console.WriteLine($"Current balance: {(decimal)cashManager.AvailableBalance()}");
 

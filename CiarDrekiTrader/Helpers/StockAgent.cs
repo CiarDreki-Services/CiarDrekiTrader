@@ -1,6 +1,9 @@
 ﻿using CiarDrekiTrader.Data;
 using CiarDrekiTrader.Data.Models;
+using Newtonsoft.Json;
 using ServiceStack;
+using System.Net;
+using static System.Net.WebRequestMethods;
 
 namespace CiarDrekiTrader.Helpers
 {
@@ -8,11 +11,14 @@ namespace CiarDrekiTrader.Helpers
     {
         private readonly CiarDrekiTradingContext _tradingContext;
         private readonly string _yourApi;
+        private List<StockPrice> stockPrices = new();
+        private readonly string url = "https://query1.finance.yahoo.com/v8/finance/chart/{0}?region=US&lang=en-US";
+
 
         public StockAgent(CiarDrekiTradingContext tradingContext, string yourAPI)
         {
             _tradingContext = tradingContext;
-            _yourApi = yourAPI; 
+            _yourApi = yourAPI;
         }
 
         public void PurchaseNewMovers(decimal availableBalance)
@@ -40,25 +46,22 @@ namespace CiarDrekiTrader.Helpers
         {
             Console.WriteLine("Checking old stock...");
             var latestMovers = _tradingContext.TopStocks.OrderByDescending(i => i.Id).FirstOrDefault();
-            var oldStocks = _tradingContext.OwnedStocks.Where(i => i.Symbol != latestMovers.Symbol1 && i.Symbol != latestMovers.Symbol2 && i.Symbol != latestMovers.Symbol3 && i.Symbol != latestMovers.Symbol4 && i.Symbol != latestMovers.Symbol5);
-
-            foreach(var item in oldStocks)
-            {
-                SellStock(GetLatestPrice(item.Symbol), item.Qty);
-                Thread.Sleep(400);
-            }
-            _tradingContext.SaveChanges();
-        }
-
-        internal void GetStockAssetTotal()
-        {
             var oldStocks = _tradingContext.OwnedStocks.OrderByDescending(i => i.Qty);
+
             decimal totalVal = 0;
             foreach (var item in oldStocks)
             {
-              totalVal += GetLatestPrice(item.Symbol).Val * item.Qty;
+                var stock = GetLatestPrice(item.Symbol);
+                stockPrices.Add(stock);
+                totalVal += stock.Val * item.Qty;
             }
             Console.WriteLine($"Your current assets value is: {totalVal}");
+            var stockToSell = oldStocks.Where(i => i.Symbol != latestMovers.Symbol1 && i.Symbol != latestMovers.Symbol2 && i.Symbol != latestMovers.Symbol3 && i.Symbol != latestMovers.Symbol4 && i.Symbol != latestMovers.Symbol5);
+            foreach (var item in stockToSell)
+            {
+                SellStock(stockPrices.Find(i => i.Symbol == item.Symbol), item.Qty);
+            }
+            _tradingContext.SaveChanges();
         }
 
         private void SellStock(StockPrice stock, int qty, string comments = null)
@@ -84,17 +87,17 @@ namespace CiarDrekiTrader.Helpers
     
         private StockPrice GetLatestPrice(string symbol)
         {
-            List<AlphaVantageTSD> monthlyPrices = GetFromAPI(symbol);
+            var monthlyPrices = GetFromAPI(symbol);
 
             var stockPrice = new StockPrice()
             {
                 Symbol = symbol,
-                Val = monthlyPrices.FirstOrDefault().Close,
-                OfficialTimeStamp = monthlyPrices.FirstOrDefault().Timestamp
+                Val = monthlyPrices.Close,
+                OfficialTimeStamp = monthlyPrices.Timestamp
             };
 
             var lastEntry = _tradingContext.StockPrices.Where(i => i.Symbol == symbol).OrderByDescending(i=>i.Id).FirstOrDefault();
-            if(lastEntry != null && lastEntry.Val == monthlyPrices.FirstOrDefault().Close)
+            if(lastEntry != null && lastEntry.Val == stockPrice.Val)
             {
                 return lastEntry;
             }
@@ -105,14 +108,29 @@ namespace CiarDrekiTrader.Helpers
             return stockPrice;
         }
 
-        private List<AlphaVantageTSD> GetFromAPI(string symbol)
+        private YahooFinance GetFromAPI(string symbol)
         {
-            List<AlphaVantageTSD> monthlyPrices;
+            YahooFinance monthlyPrices;
             try
             {
                 if(symbol.Contains("-"))
                     symbol = symbol.Substring(0, symbol.IndexOf("-"));
-                monthlyPrices = string.Format("https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol={0}&apikey={1}&datatype=csv", symbol, _yourApi).GetStringFromUrl().FromCsv<List<AlphaVantageTSD>>();
+                string jsonString;
+                using(var client = new WebClient())
+                {
+                    jsonString = client.DownloadString(string.Format("https://query1.finance.yahoo.com/v8/finance/chart/{0}?region=US&lang=en-US", symbol));
+                }
+                var response = JsonConvert.DeserializeObject<Root>(jsonString);
+                monthlyPrices = new YahooFinance()
+                {
+                    Timestamp = new DateTime(1970,01,01).AddSeconds(response.Chart.Result.FirstOrDefault().Timestamp.FirstOrDefault()),
+                    Open = response.Chart.Result.FirstOrDefault().Indicators.Quote.FirstOrDefault().Open.FirstOrDefault().Value,
+                    High = response.Chart.Result.FirstOrDefault().Indicators.Quote.FirstOrDefault().High.FirstOrDefault().Value,
+                    Low = response.Chart.Result.FirstOrDefault().Indicators.Quote.FirstOrDefault().Low.FirstOrDefault().Value,
+                    Close = response.Chart.Result.FirstOrDefault().Indicators.Quote.FirstOrDefault().Close.FirstOrDefault().Value,
+                    Volume = response.Chart.Result.FirstOrDefault().Indicators.Quote.FirstOrDefault().Volume.FirstOrDefault().Value
+                };
+                //monthlyPrices = string.Format("https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol={0}&apikey={1}&datatype=csv", symbol, _yourApi).GetStringFromUrl().FromCsv<List<AlphaVantageTSD>>();
             }
             catch (Exception ex)
             {
